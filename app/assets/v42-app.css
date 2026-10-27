@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+    /* ── 系統統一色彩/間距 token：先套用在整體外框(頂列/側邊欄)，其餘頁面之後再逐步套用 ── */
+    :root {
+      --brand: #2563eb;
+      --brand-dark: #1d4ed8;
+      --brand-soft: #eff6ff;
+      --ink-900: #0f172a;
+      --ink-700: #334155;
+      --ink-500: #64748b;
+      --ink-400: #94a3b8;
+      --line: #e2e8f0;
+      --line-soft: #f1f5f9;
+      --surface: #fff;
+      --bg: #f8fafc;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --shadow-sm: 0 1px 2px rgba(15,23,42,.04);
+      --shadow-md: 0 4px 16px rgba(15,23,42,.06);
+    }
+    body { font-family: 'Inter', 'PingFang TC', 'Microsoft JhengHei', sans-serif; }
+    .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+    th { white-space: nowrap; }
+    textarea { resize: vertical; }
+    .chart-wrap { position: relative; height: 360px; }
+
+    /* ── Trend UI styles ── */
+    .tr-panel{background:var(--surface);border:0.5px solid var(--line);border-radius:var(--radius-md);box-shadow:var(--shadow-sm)}
+    .tr-sb-btn{display:flex;align-items:center;gap:7px;width:100%;padding:6px 9px;border-radius:6px;border:none;background:transparent;color:#64748b;font-size:12px;cursor:pointer;text-align:left;font-family:inherit}
+    .tr-sb-btn:hover{background:#f1f5f9}
+    .tr-sb-btn.on{background:#dbeafe;color:#1e40af;font-weight:600}
+    .tr-ptab{padding:4px 12px;border-radius:6px;border:0.5px solid #e2e8f0;background:transparent;color:#64748b;font-size:12px;cursor:pointer;font-family:inherit}
+    .tr-ptab.on{background:var(--brand-dark);color:#fff;border-color:var(--brand-dark)}
+    .tr-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;cursor:pointer;border:0.5px solid transparent;user-select:none;font-family:inherit}
+    .tr-chip.off{background:#f1f5f9;color:#64748b;border-color:#e2e8f0}
+    /* tr-pcheck removed — replaced by inline shortcut button styles */
+    .tr-mini-btn{font-size:11px;padding:6px 12px;min-height:32px;border-radius:5px;border:0.5px solid #e2e8f0;background:transparent;cursor:pointer;color:#64748b;font-family:inherit}
+    .tr-mini-btn:hover{background:#f1f5f9}
+    .tr-rank-row{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px}
+    .tr-rank-row:hover{background:#f1f5f9}
+    .tr-meter-bg{flex:1;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden}
+    .tr-shift-pill{font-size:11px;padding:2px 7px;border-radius:10px;font-weight:600;white-space:nowrap}
+    .tr-fbox{background:#f8fafc;border-radius:8px;padding:10px 12px}
+    .tr-kpi{background:#f1f5f9;border-radius:8px;padding:10px 12px}
+    .tr-kpi-row{display:grid;grid-template-columns:repeat(5, minmax(0,1fr));gap:10px}
+    .rwd-multi-col{display:grid}
+    .app-topbar-actions{flex-wrap:wrap;justify-content:flex-end;row-gap:6px}
+    .mobile-menu-btn{display:none}
+    /* V40：寬螢幕 KPI 一列 6 張（第一個畫面看得到全部數字），1300px 以下一列 3 張，再窄交給原本的 2 欄／1 欄規則 */
+    @media(max-width:1300px){.v40-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr)) !important}}
+    @media(max-width:1280px){.v37-diagnosis-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important}.v394-action-grid{grid-template-columns:minmax(240px,2fr) minmax(100px,.7fr) 140px 110px auto !important}}
+    @media(max-width:900px){.v37-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important}.v394-decision-grid{grid-template-columns:1fr !important}.v394-action-grid{grid-template-columns:1fr 1fr !important}}
+    @media(max-width:760px){.v37-diagnosis-grid{grid-template-columns:1fr !important}}
+    @media(max-width:520px){.v37-kpi-grid{grid-template-columns:1fr !important}.v394-action-grid{grid-template-columns:1fr !important}}
+
+    /* ── Responsive layout ── */
+    @media (max-width: 1280px) {
+      .tr-kpi-row{grid-template-columns:repeat(3, minmax(0,1fr))}
+    }
+    @media (max-width: 1024px) {
+      .app-main{grid-template-columns:1fr !important}
+      .app-sidebar{flex-direction:row !important;flex-wrap:wrap;border-right:none !important;border-bottom:0.5px solid #e2e8f0;padding:10px !important}
+      .app-sidebar.mobile-hidden{display:none !important}
+      .mobile-menu-btn{display:flex !important}
+      .app-sidebar-btn{width:auto !important}
+      .app-topbar{height:auto !important;min-height:56px;flex-wrap:wrap;padding:8px 16px !important;row-gap:8px}
+      .rwd-split{grid-template-columns:1fr !important}
+      .rwd-split > div:first-child{border-right:none !important;border-bottom:0.5px solid #f1f5f9}
+      .tr-kpi-row{grid-template-columns:repeat(2, minmax(0,1fr))}
+      .rwd-multi-col{grid-template-columns:repeat(2, minmax(0,1fr)) !important}
+      .effective-rule-row{grid-template-columns:repeat(2, minmax(0,1fr)) !important}
+      .effective-rule-submit{grid-column:span 2}
+    }
+    @media (max-width: 640px) {
+      table{font-size:12px}
+      .tr-ptab,.tr-chip{padding:6px 12px;min-height:30px}
+      .tr-kpi-row{grid-template-columns:1fr}
+      .app-syncstatus{display:none}
+    }
+    @media (max-width: 480px) {
+      .rwd-multi-col{grid-template-columns:1fr !important}
+      .effective-rule-row{grid-template-columns:1fr !important}
+    }

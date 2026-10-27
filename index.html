@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests" />
+  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()" />
+  <meta name="referrer" content="no-referrer-when-downgrade" />
+  <title>客服電話紀錄長期觀察系統 v42.7｜人員班別歷程版</title>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <script src="./app/src/v41-core.js"></script>
+  <script src="./app/src/tw-holidays.js"></script>
+  <link rel="stylesheet" href="./app/assets/tailwind-static.css" />
+
+  <link rel="stylesheet" href="./app/assets/v42-app.css" />
+</head>
+<body class="bg-slate-100">
+<div id="root">
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:#334155;font-family:Microsoft JhengHei,Arial,sans-serif;font-weight:700;">
+    系統載入中...
+  </div>
+</div>
+
+<!-- 護眼模式：全螢幕暖色濾鏡疊層，獨立於 React 之外運作，開機/登入畫面就能生效。
+     開關按鈕改成 2 個「定點」控制項(登入卡片右上角一個、登入後頂列一個)，都不會用 position:fixed 飄在畫面角落，
+     避免跟頂列按鈕群或各頁面自己的操作按鈕互相疊住。 -->
+<div id="eyecareOverlay" style="position:fixed;inset:0;z-index:2147483000;pointer-events:none;mix-blend-mode:multiply;background:rgba(255,224,153,.22);display:none;"></div>
+<script>
+(function () {
+  var STORAGE_KEY = "weekly_call_project_eyecare";
+  var overlay = document.getElementById("eyecareOverlay");
+  function isOn() { return overlay.style.display !== "none"; }
+  function applyState(on) {
+    overlay.style.display = on ? "block" : "none";
+    try { localStorage.setItem(STORAGE_KEY, on ? "1" : "0"); } catch (e) {}
+    document.querySelectorAll("[data-eyecare-btn]").forEach(function (btn) {
+      btn.style.background = on ? "#fef3c7" : "#fff";
+      btn.style.color = on ? "#b45309" : (btn.getAttribute("data-eyecare-idle-color") || "#64748b");
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+  var saved = null;
+  try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+  applyState(saved === "1");
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("[data-eyecare-btn]");
+    if (btn) applyState(!isOn());
+  });
+  window.__eyecareSyncButton = function (btn) {
+    var on = isOn();
+    btn.style.background = on ? "#fef3c7" : "#fff";
+    btn.style.color = on ? "#b45309" : (btn.getAttribute("data-eyecare-idle-color") || "#64748b");
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  };
+})();
+</script>
+
+<script>
+function escapeHTML(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+window.addEventListener('error', function (event) {
+  var root = document.getElementById('root');
+  if (!root) return;
+  if ((root.innerText || '').includes('系統載入中')) {
+    root.innerHTML =
+      '<div style="min-height:100vh;background:#f1f5f9;padding:24px;font-family:Microsoft JhengHei,Arial,sans-serif;color:#334155;">' +
+      '<div style="max-width:980px;margin:40px auto;background:white;border:1px solid #fecaca;border-radius:24px;padding:28px;box-shadow:0 10px 25px rgba(15,23,42,.08);line-height:1.8;">' +
+      '<div style="font-size:24px;font-weight:900;color:#b91c1c;margin-bottom:12px;">系統載入失敗</div>' +
+      '<div style="font-weight:700;">錯誤訊息：</div>' +
+      '<pre style="white-space:pre-wrap;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;border-radius:12px;padding:16px;">' +
+      escapeHTML(event.message || '未知錯誤') +
+      '</pre>' +
+      '<div style="font-size:13px;color:#64748b;margin-top:12px;">請把這個錯誤畫面截圖給我，我會直接修正完整程式碼。</div>' +
+      '</div></div>';
+  }
+});
+
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    var root = document.getElementById('root');
+    if (!root) return;
+    var text = (root.innerText || '').trim();
+    var stillLoading = text === '系統載入中...' || text === '';
+    if (stillLoading && (!window.React || !window.ReactDOM)) {
+      root.innerHTML =
+        '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f1f5f9;padding:24px;font-family:Microsoft JhengHei,Arial,sans-serif;">' +
+        '<div style="max-width:760px;background:white;border:1px solid #e2e8f0;border-radius:24px;padding:28px;box-shadow:0 10px 25px rgba(15,23,42,.08);color:#334155;line-height:1.8;">' +
+        '<div style="font-size:24px;font-weight:900;margin-bottom:8px;color:#0f172a;">系統套件載入失敗</div>' +
+        '<div style="font-weight:700;">請確認網路可以連到 React / Chart.js / XLSX CDN，或重新整理頁面。</div>' +
+        '<div style="font-size:13px;color:#64748b;margin-top:12px;">如果你是直接用本機開啟 HTML，請改放到 GitHub Pages 後再開啟。</div>' +
+        '</div></div>';
+    }
+  }, 5000);
+});
+</script>
+<script src="./app/src/v42-app.js"></script>
+</body>
+</html>
