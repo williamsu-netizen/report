@@ -4,8 +4,9 @@ const EMPTY_EFFECTIVE_RULES = { "周明瑝": { start: "2025-W09", end: "2025-W35
 const EMPTY_CLOUD_STORE = { rows: [], weeks: {}, months: {}, years: {}, detailByWeek: {} };
 const EMPTY_PREVIEW_META = { mode: "none", title: "尚未載入資料", weekKeys: [], monthKeys: [], yearKeys: [], sourceCount: 0, recordCountBeforeDedupe: 0, recordCountAfterDedupe: 0 };
 const EMPTY_EVENT_LIST = [];
-const APP_VERSION = "v42.7｜人員班別歷程版";
+const APP_VERSION = "v42.8｜雲端版";
 const VERSION_HISTORY = [
+    { version: "v42.8.0-cloud", date: "2026-10-27", title: "雲端版", changes: ["由 V42.7 另存新檔，未覆蓋舊版", "接上新的 Firebase 雲端（專案 office-e266d），跟舊版的雲端完全分開", "打開網頁先用 Email＋密碼登入；登入後自動從雲端讀回電話資料、班表、人員有效期間、事件", "匯入電話資料後自動存到雲端（只寫有變動的月份）；改班表、人員有效期間、事件也會馬上存到雲端", "也可以選「先不登入」，跟 V42.7 一樣只在這台電腦用", "右上角顯示登入的帳號，可以登出；登出後畫面上的資料會清掉，雲端的資料還在"] },
     { version: "v42.7.0-local", date: "2026-10-26", title: "人員班別歷程版", changes: ["由 V42.6 另存新檔，未覆蓋舊版", "報表分析新增「人員班別歷程」頁：選一位客服，看他每個月上什麼班（時間線與每月明細）", "同一頁列出每次換班前後的表現比較：每月接聽數、Q1／Q2 非常滿意、Q1／Q2 調查率、平均處理與發話時間", "可選換班前後各比 1、3 或 6 個月；只算人員有效期間內的電話"] },
     { version: "v42.6.0-local", date: "2026-10-18", title: "匯入缺日檢查版", changes: ["由 V42.5 另存新檔，未覆蓋舊版", "匯入前預覽會檢查資料中間有沒有「完全沒有電話」的日子（例如 8/12～8/14），可能是少匯出了", "追加資料時，也會檢查舊資料和新資料之間有沒有空掉", "缺的日子如果是國定假日，會標出假日名稱，提醒可能本來就沒電話", "這些提醒也會留在資料驗證報告裡"] },
     { version: "v42.5.0-local", date: "2026-10-14", title: "雙重複核修正版", changes: ["由 V42.4 另存新檔，未覆蓋舊版；修正 Codex 與 Antigravity 複核找到的問題", "去年比較改成逐日檢查：資料中間缺一整個月顯示「去年無資料」，去年只記到月中顯示「去年資料不完整」；去年偶爾幾天沒電話（例如休息日）仍可比較", "本期只匯入部分日期時（例如 2/10～2/20），只跟去年同一段日期比", "班表中間缺的月份（刪掉的或提早建立未來月份造成的空檔）也會自動沿用並提醒確認", "「新增月份」先帶入上一個月的名單，按儲存後才算確認", "黃色提醒分別寫出每個月是沿用哪個月；來源月份被刪掉時會註明", "人員有效期間改用電話當天的日期判斷，交界那幾天不再誤判", "班表比對時忽略名字前後的空白", "計算核心移除重複的同名工具，並新增 9 項自動測試（共 70 項）"] },
@@ -2420,8 +2421,52 @@ function ImportPreviewDialog({ preview, onConfirm, onCancel }) {
                     React.createElement("button", { type: "button", onClick: () => onConfirm(preview.existingCount > 0 ? "append" : "replace"), style: CRM.btnPrimary }, preview.existingCount > 0 ? "追加並合併" : "使用這批資料")))));
 }
 
+// V42.8：登入畫面（Email＋密碼）。也可以先不登入，只在這台電腦用。
+function LoginScreen({ onLocal }) {
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+    const cloudOk = !!(window.CloudStore && window.CloudStore.available());
+    const submit = async (e) => {
+        e.preventDefault();
+        if (!email.trim() || !password) return setError("請輸入 Email 和密碼。");
+        setBusy(true); setError("");
+        try { await window.CloudStore.signIn(email, password); }
+        catch (err) { setError(window.CloudStore.errorText(err)); setBusy(false); }
+    };
+    const input = { width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", fontFamily: "inherit" };
+    return React.createElement("div", { style: { minHeight: "100vh", background: "var(--bg, #f1f5f9)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", fontFamily: "'Inter','PingFang TC','Microsoft JhengHei',sans-serif" } },
+        React.createElement("form", { onSubmit: submit, style: { width: "100%", maxWidth: "380px", background: "#fff", border: "0.5px solid #e2e8f0", borderRadius: "14px", padding: "28px", boxShadow: "0 10px 25px rgba(15,23,42,.08)", display: "flex", flexDirection: "column", gap: "12px" } },
+            React.createElement("div", { style: { fontSize: "18px", fontWeight: "700", color: "#0f172a" } }, "客服電話紀錄長期觀察系統"),
+            React.createElement("div", { style: { fontSize: "11px", fontWeight: "700", color: "#1d4ed8" } }, APP_VERSION),
+            cloudOk ? React.createElement(React.Fragment, null,
+                React.createElement("label", { style: { fontSize: "12px", color: "#475569", fontWeight: "600" } }, "Email",
+                    React.createElement("input", { type: "email", autoComplete: "username", value: email, onChange: (e) => setEmail(e.target.value), style: { ...input, marginTop: "4px" } })),
+                React.createElement("label", { style: { fontSize: "12px", color: "#475569", fontWeight: "600" } }, "密碼",
+                    React.createElement("input", { type: "password", autoComplete: "current-password", value: password, onChange: (e) => setPassword(e.target.value), style: { ...input, marginTop: "4px" } })),
+                error && React.createElement("div", { role: "alert", style: { fontSize: "12px", color: "#b91c1c", background: "#fef2f2", border: "0.5px solid #fecaca", borderRadius: "8px", padding: "8px 10px" } }, error),
+                React.createElement("button", { type: "submit", disabled: busy, style: { padding: "10px", border: "none", borderRadius: "8px", background: "#2563eb", color: "#fff", fontSize: "14px", fontWeight: "700", cursor: busy ? "wait" : "pointer", fontFamily: "inherit" } }, busy ? "登入中…" : "登入"),
+                React.createElement("div", { style: { fontSize: "11px", color: "#94a3b8", lineHeight: 1.6 } }, "登入後，電話資料、班表、人員有效期間會存在雲端，換電腦也看得到。"))
+            : React.createElement("div", { style: { fontSize: "12px", color: "#92400e", background: "#fffbeb", border: "0.5px solid #fde68a", borderRadius: "8px", padding: "10px", lineHeight: 1.6 } }, "雲端功能載入失敗（可能沒有網路，或是直接開啟本機檔案）。現在只能在這台電腦使用。"),
+            React.createElement("button", { type: "button", onClick: onLocal, style: { padding: "8px", border: "0.5px solid #e2e8f0", borderRadius: "8px", background: "#fff", color: "#64748b", fontSize: "12px", cursor: "pointer", fontFamily: "inherit" } }, "先不登入（資料只在這台電腦，不會存到雲端）")));
+}
 function App() {
     const [syncStatus, setSyncStatus] = useState("資料只在這台電腦的瀏覽器中分析");
+    // V42.8：雲端。cloudUser：undefined＝確認中、null＝沒登入；cloudReady＝雲端資料讀完了。
+    const [cloudUser, setCloudUser] = useState(undefined);
+    const [localOnly, setLocalOnly] = useState(false);
+    const [cloudReady, setCloudReady] = useState(false);
+    const [cloudError, setCloudError] = useState("");
+    const [cloudReloadTick, setCloudReloadTick] = useState(0);
+    const cloudOnRef = useRef(false);
+    const cloudSavingRef = useRef(0);
+    const cloudQueueRef = useRef(Promise.resolve());
+    const skipUnloadRef = useRef(false);
+    const cloudSaveSetting = (key, value) => {
+        if (!cloudOnRef.current) return;
+        window.CloudStore.saveSetting(key, value).then(() => setSyncStatus("已存到雲端")).catch((e) => { console.error(e); setSyncStatus("雲端儲存失敗：" + window.CloudStore.errorText(e)); });
+    };
     // V39：門檻、樣本數下限、目標值、人力預測參數（存在本機瀏覽器）。
     const [analysisSettings, setAnalysisSettings] = useState(loadAnalysisSettings);
     // V39.2：左側選單各分組的收合狀態（記在本機）。
@@ -2494,17 +2539,17 @@ function App() {
     // V42.2：記錄「哪個月是自動從哪個月沿用、還沒確認」，例如 { "2026-11": "2026-10" }。
     const SHIFT_AUTO_KEY = "weekly_call_project_shift_auto_months";
     const [shiftAutoMonths, setShiftAutoMonths] = useState(() => { try { return JSON.parse(localStorage.getItem(SHIFT_AUTO_KEY) || "{}") || {}; } catch (e) { return {}; } });
-    const saveShiftAutoMonths = (map) => { setShiftAutoMonths(map); try { localStorage.setItem(SHIFT_AUTO_KEY, JSON.stringify(map)); } catch (e) { } };
+    const saveShiftAutoMonths = (map) => { setShiftAutoMonths(map); try { localStorage.setItem(SHIFT_AUTO_KEY, JSON.stringify(map)); } catch (e) { } cloudSaveSetting("shift_auto_months", map); };
     const isShiftPending = (monthKey) => Object.prototype.hasOwnProperty.call(shiftAutoMonths, monthKey); // 來源可能是空字串（新增、還沒儲存）
     const markShiftMonthConfirmed = (monthKey) => { if (isShiftPending(monthKey)) { const next = { ...shiftAutoMonths }; delete next[monthKey]; saveShiftAutoMonths(next); } };
     const saveShiftRules = async (rules) => {
         setShiftRules(rules);
         localStorage.setItem("weekly_call_project_shift_rules", JSON.stringify(rules));
-        setSyncStatus("班表已儲存（本機）");
+        if (cloudOnRef.current) cloudSaveSetting("shift_rules", rules); else setSyncStatus("班表已儲存（本機）");
     };
     const persistEvents = async (events) => {
         localStorage.setItem("weekly_call_project_events", JSON.stringify(events));
-        setSyncStatus("事件註記已儲存（本機）");
+        if (cloudOnRef.current) cloudSaveSetting("events", events); else setSyncStatus("事件註記已儲存（本機）");
     };
     const addEvent = (draft) => {
         const id = `ev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -2517,7 +2562,7 @@ function App() {
     const saveEffectiveRules = async (rules) => {
         setEffectiveRules(rules);
         localStorage.setItem("weekly_call_project_effective_rules", JSON.stringify(rules));
-        setSyncStatus("人員有效期間已儲存（本機）");
+        if (cloudOnRef.current) cloudSaveSetting("effective_rules", rules); else setSyncStatus("人員有效期間已儲存（本機）");
     };
     // V41：兩個比例的平均，忽略「無資料」(null)；兩個都沒有就是 null。
     const avgOf = (...vals) => { const v = vals.filter((x) => x != null); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
@@ -2792,6 +2837,7 @@ function App() {
         if (JSON.stringify(plan.rules) !== JSON.stringify(shiftRules)) {
             setShiftRules(plan.rules);
             try { localStorage.setItem("weekly_call_project_shift_rules", JSON.stringify(plan.rules)); } catch (e) { }
+            cloudSaveSetting("shift_rules", plan.rules);
             setSyncStatus("班表已自動沿用，請到班表設定確認");
         }
     }, [shiftRules, shiftAutoMonths, latestDataMonth]);
@@ -2814,9 +2860,83 @@ function App() {
         setPreviewRows(refreshed);
         setCloudMasterStore(buildLocalMasterStore(refreshed));
     }, [shiftRules, effectiveRules]);
-    // V41：資料只存在這次開啟的頁面；有資料時，重新整理或關閉分頁前先提醒。
+    // V42.8：登入狀態與雲端讀取
     useEffect(() => {
-        const handler = (e) => { if ((cloudMasterStore.rows || []).length) { e.preventDefault(); e.returnValue = ""; } };
+        if (!window.CloudStore) { setCloudUser(null); return; }
+        return window.CloudStore.onAuth((user) => setCloudUser(user || null));
+    }, []);
+    useEffect(() => {
+        cloudOnRef.current = false;
+        setCloudReady(false);
+        if (!cloudUser) return;
+        let cancelled = false;
+        (async () => {
+            setCloudError("");
+            setSyncStatus("正在從雲端讀取資料…");
+            try {
+                const cloud = await window.CloudStore.loadSettings();
+                if (cancelled) return;
+                const SETTING_KEYS = [
+                    ["shift_rules", "weekly_call_project_shift_rules", setShiftRules, EMPTY_SHIFT_RULES],
+                    ["effective_rules", "weekly_call_project_effective_rules", setEffectiveRules, EMPTY_EFFECTIVE_RULES],
+                    ["events", "weekly_call_project_events", setEventList, EMPTY_EVENT_LIST],
+                    ["shift_auto_months", SHIFT_AUTO_KEY, setShiftAutoMonths, {}],
+                ];
+                const values = {};
+                if (!SETTING_KEYS.some(([k]) => cloud[k] != null)) {
+                    // 第一次用雲端：問要不要把這台電腦的設定傳上去
+                    const local = SETTING_KEYS.map(([k, lk]) => { try { return [k, JSON.parse(localStorage.getItem(lk) || "null")]; } catch (e) { return [k, null]; } }).filter(([, v]) => v != null);
+                    if (local.length && window.confirm("雲端還沒有班表、人員有效期間等設定。\n要把這台電腦目前的設定傳到雲端嗎？\n\n按「確定」＝傳上去；按「取消」＝雲端從空白開始。")) {
+                        for (const [k, v] of local) { await window.CloudStore.saveSetting(k, v); values[k] = v; }
+                    }
+                }
+                else Object.assign(values, cloud);
+                if (cancelled) return;
+                SETTING_KEYS.forEach(([k, lk, set, empty]) => { const v = values[k] != null ? values[k] : empty; set(v); try { localStorage.setItem(lk, JSON.stringify(v)); } catch (e) { } });
+                const calls = await window.CloudStore.loadCalls();
+                if (cancelled) return;
+                const rulesForRows = values.shift_rules || EMPTY_SHIFT_RULES;
+                const rows = calls.rows.map((r) => { if (!r.agent) return { ...r, shift: "", shiftSource: "missed-call" }; const info = getShiftInfoFromRules(rulesForRows, r.agent, r.monthKey); return { ...r, shift: info.shift, shiftSource: info.source }; });
+                const fileNames = calls.fileNames || [];
+                const sourceName = fileNames.length > 1 ? `${fileNames[0]} 等 ${fileNames.length} 個檔案` : (fileNames[0] || (rows.length ? "雲端資料" : ""));
+                setCsvFileName(sourceName);
+                setLoadedFileNames(fileNames);
+                setPreviewRows(rows);
+                setCloudMasterStore(rows.length ? buildLocalMasterStore(rows) : EMPTY_CLOUD_STORE);
+                setPreviewMeta(rows.length ? { mode: "multi_week", title: sourceName, weekKeys: Array.from(new Set(rows.map((r) => r.weekKey).filter(Boolean))).sort(), monthKeys: Array.from(new Set(rows.map((r) => r.monthKey).filter(Boolean))).sort(), yearKeys: Array.from(new Set(rows.map((r) => r.yearKey).filter(Boolean))).sort(), sourceCount: fileNames.length, recordCountBeforeDedupe: rows.length, recordCountAfterDedupe: rows.length } : EMPTY_PREVIEW_META);
+                setValidationReport(null);
+                cloudOnRef.current = true;
+                setCloudReady(true);
+                setSyncStatus(rows.length ? `已從雲端讀回 ${rows.length.toLocaleString()} 筆電話資料` : "已連上雲端（還沒有電話資料）");
+                if (rows.length) setActiveTab("weekly");
+            }
+            catch (e) {
+                console.error(e);
+                if (!cancelled) setCloudError(window.CloudStore.errorText(e));
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [cloudUser, cloudReloadTick]);
+    // 電話資料存到雲端：一次只存一批，避免兩批同時寫入互相打架
+    const saveCallsToCloud = (rows, fileNames) => {
+        if (!cloudOnRef.current) return;
+        cloudSavingRef.current += 1;
+        setSyncStatus("正在把電話資料存到雲端…（先不要關掉網頁）");
+        cloudQueueRef.current = cloudQueueRef.current.then(() => window.CloudStore.saveCalls(rows, fileNames))
+            .then(() => setSyncStatus(`電話資料已存到雲端（共 ${rows.length.toLocaleString()} 筆）`))
+            .catch((e) => { console.error(e); setSyncStatus("電話資料存到雲端失敗"); alert("電話資料存到雲端失敗：" + window.CloudStore.errorText(e) + "\n資料還在畫面上，可以重新匯入一次再試。"); })
+            .finally(() => { cloudSavingRef.current -= 1; });
+    };
+    const logoutCloud = () => {
+        if (cloudSavingRef.current > 0) return alert("資料還在存到雲端，請等右上角顯示「已存到雲端」再登出。");
+        if (!window.confirm("確定要登出嗎？\n登出後畫面上的資料會清掉，雲端的資料還在，下次登入會再讀回來。")) return;
+        skipUnloadRef.current = true;
+        window.CloudStore.signOut().finally(() => window.location.reload());
+    };
+    // V41：資料只存在這次開啟的頁面；有資料時，重新整理或關閉分頁前先提醒。
+    // V42.8：已登入雲端、而且已經存好時不提醒；還在存的時候會提醒。
+    useEffect(() => {
+        const handler = (e) => { if (skipUnloadRef.current) return; if ((cloudMasterStore.rows || []).length && (!cloudOnRef.current || cloudSavingRef.current > 0)) { e.preventDefault(); e.returnValue = ""; } };
         window.addEventListener("beforeunload", handler);
         return () => window.removeEventListener("beforeunload", handler);
     }, [cloudMasterStore]);
@@ -2892,6 +3012,7 @@ function App() {
         setUploadMessage(`已${append ? "追加" : "取代"} ${pendingImport.selectedFileNames.length} 個檔案${failCount ? `（${failCount} 個失敗，請看驗證報告）` : ""}，目前共 ${rows.length.toLocaleString()} 筆有效資料${append && pendingImport.overlapWithExisting ? `；與原有資料重複 ${pendingImport.overlapWithExisting.toLocaleString()} 筆已合併` : ""}。`);
         setPendingImport(null);
         setActiveTab("weekly");
+        saveCallsToCloud(rows, fileNames);
     };
     const buildSatisfactionAnalysisRows = (rows = []) => {
         const map = new Map();
@@ -3189,6 +3310,17 @@ function App() {
             React.createElement("h2", { style: { fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: 0 } }, title),
             subtitle && React.createElement("p", { style: { fontSize: "12px", color: "#94a3b8", marginTop: "4px" } }, subtitle)),
         actions && React.createElement("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } }, actions)));
+    // V42.8：還沒登入先顯示登入畫面；登入後等雲端資料讀完再進入系統
+    const centerBox = (children) => React.createElement("div", { style: { ...pageStyle, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" } }, React.createElement("div", { style: { background: "#fff", border: "0.5px solid #e2e8f0", borderRadius: "14px", padding: "24px 28px", maxWidth: "420px", width: "100%", display: "flex", flexDirection: "column", gap: "12px", color: "#334155", fontSize: "14px", lineHeight: 1.7 } }, children));
+    if (cloudUser === undefined && !localOnly) return centerBox("正在確認登入狀態…");
+    if (!cloudUser && !localOnly) return React.createElement(LoginScreen, { onLocal: () => setLocalOnly(true) });
+    if (cloudUser && !cloudReady) return centerBox(cloudError ? [
+        React.createElement("div", { key: "t", style: { fontWeight: "700", color: "#b91c1c" } }, "讀取雲端資料失敗"),
+        React.createElement("div", { key: "m" }, cloudError),
+        React.createElement("div", { key: "b", style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+            React.createElement("button", { type: "button", onClick: () => setCloudReloadTick((n) => n + 1), style: CRM.btnPrimary }, "再試一次"),
+            React.createElement("button", { type: "button", onClick: () => { skipUnloadRef.current = true; window.CloudStore.signOut().finally(() => window.location.reload()); }, style: CRM.btnSecondary || CRM.btnPrimary }, "登出"))
+    ] : `正在從雲端讀取資料…（${cloudUser.email}）`);
     return (React.createElement("div", { style: pageStyle },
         pendingImport && React.createElement(ImportPreviewDialog, { preview: pendingImport, onConfirm: applyPendingImport, onCancel: () => { setPendingImport(null); setUploadMessage("已取消，資料沒有變更。"); } }),
         React.createElement("div", { className: "app-topbar", style: topbarStyle },
@@ -3201,6 +3333,11 @@ function App() {
                 React.createElement("span", { style: { fontSize: "10px", fontWeight: "700", color: "#1d4ed8", background: "#eff6ff", border: "0.5px solid #bfdbfe", borderRadius: "999px", padding: "2px 7px" } }, APP_VERSION)),
             React.createElement("div", { className: "app-topbar-actions", style: { display: "flex", alignItems: "center", gap: "10px" } },
                 React.createElement("span", { className: "app-syncstatus", style: { fontSize: "11px", color: "#94a3b8" } }, syncStatus),
+                cloudUser
+                    ? React.createElement("span", { style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#475569" } },
+                        React.createElement("span", { title: "已登入雲端", style: { color: "#15803d", fontWeight: "700" } }, `☁ ${cloudUser.email}`),
+                        React.createElement("button", { type: "button", onClick: logoutCloud, style: { border: "0.5px solid var(--line)", background: "var(--surface)", color: "var(--ink-500)", borderRadius: "6px", padding: "4px 8px", fontSize: "11px", cursor: "pointer", fontFamily: "inherit" } }, "登出"))
+                    : React.createElement("button", { type: "button", onClick: () => setLocalOnly(false), title: "目前資料只在這台電腦", style: { border: "0.5px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", borderRadius: "6px", padding: "4px 8px", fontSize: "11px", cursor: "pointer", fontFamily: "inherit" } }, "本機模式｜登入雲端"),
                 React.createElement("button", { "data-eyecare-btn": "true", "data-eyecare-idle-color": "var(--ink-500)", ref: (el) => el && window.__eyecareSyncButton && window.__eyecareSyncButton(el), type: "button", title: "\u8B77\u773C\u6A21\u5F0F", "aria-label": "\u8B77\u773C\u6A21\u5F0F\u5207\u63DB", style: { width: "32px", height: "32px", borderRadius: "7px", border: "0.5px solid var(--line)", background: "var(--surface)", color: "var(--ink-500)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" } },
                     React.createElement("svg", { width: "16", height: "16", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" },
                         React.createElement("path", { d: "M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" }),
