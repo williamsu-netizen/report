@@ -4,8 +4,9 @@ const EMPTY_EFFECTIVE_RULES = { "周明瑝": { start: "2025-W09", end: "2025-W35
 const EMPTY_CLOUD_STORE = { rows: [], weeks: {}, months: {}, years: {}, detailByWeek: {} };
 const EMPTY_PREVIEW_META = { mode: "none", title: "尚未載入資料", weekKeys: [], monthKeys: [], yearKeys: [], sourceCount: 0, recordCountBeforeDedupe: 0, recordCountAfterDedupe: 0 };
 const EMPTY_EVENT_LIST = [];
-const APP_VERSION = "v42.8｜雲端版";
+const APP_VERSION = "v42.8.1｜手動同步版";
 const VERSION_HISTORY = [
+    { version: "v42.8.1-cloud", date: "2026-10-27", title: "手動同步版", changes: ["由 V42.8 另存新檔，未覆蓋舊版", "右上角新增「同步到雲端」按鈕：按下去會把目前的電話資料、班表、人員有效期間、事件全部重新存一次到雲端", "同步完會再去雲端查一次，跳出視窗告訴你：雲端現在有幾筆電話、幾個月、同步時間", "畫面上沒有電話資料時，只同步設定，不會把雲端的電話資料清掉", "自動同步照舊；手動同步是給你多一層安心"] },
     { version: "v42.8.0-cloud", date: "2026-10-27", title: "雲端版", changes: ["由 V42.7 另存新檔，未覆蓋舊版", "接上新的 Firebase 雲端（專案 office-e266d），跟舊版的雲端完全分開", "打開網頁先用 Email＋密碼登入；登入後自動從雲端讀回電話資料、班表、人員有效期間、事件", "匯入電話資料後自動存到雲端（只寫有變動的月份）；改班表、人員有效期間、事件也會馬上存到雲端", "也可以選「先不登入」，跟 V42.7 一樣只在這台電腦用", "右上角顯示登入的帳號，可以登出；登出後畫面上的資料會清掉，雲端的資料還在"] },
     { version: "v42.7.0-local", date: "2026-10-26", title: "人員班別歷程版", changes: ["由 V42.6 另存新檔，未覆蓋舊版", "報表分析新增「人員班別歷程」頁：選一位客服，看他每個月上什麼班（時間線與每月明細）", "同一頁列出每次換班前後的表現比較：每月接聽數、Q1／Q2 非常滿意、Q1／Q2 調查率、平均處理與發話時間", "可選換班前後各比 1、3 或 6 個月；只算人員有效期間內的電話"] },
     { version: "v42.6.0-local", date: "2026-10-18", title: "匯入缺日檢查版", changes: ["由 V42.5 另存新檔，未覆蓋舊版", "匯入前預覽會檢查資料中間有沒有「完全沒有電話」的日子（例如 8/12～8/14），可能是少匯出了", "追加資料時，也會檢查舊資料和新資料之間有沒有空掉", "缺的日子如果是國定假日，會標出假日名稱，提醒可能本來就沒電話", "這些提醒也會留在資料驗證報告裡"] },
@@ -2927,6 +2928,41 @@ function App() {
             .catch((e) => { console.error(e); setSyncStatus("電話資料存到雲端失敗"); alert("電話資料存到雲端失敗：" + window.CloudStore.errorText(e) + "\n資料還在畫面上，可以重新匯入一次再試。"); })
             .finally(() => { cloudSavingRef.current -= 1; });
     };
+    // V42.8.1：手動同步。把目前畫面上的資料與設定全部重新存一次，再去雲端查一次筆數給使用者看。
+    const [manualSyncing, setManualSyncing] = useState(false);
+    const syncNowToCloud = async () => {
+        if (!cloudOnRef.current) return alert("還沒登入雲端，不能同步。");
+        if (manualSyncing) return;
+        setManualSyncing(true);
+        cloudSavingRef.current += 1;
+        setSyncStatus("正在同步到雲端…（先不要關掉網頁）");
+        try {
+            await cloudQueueRef.current.catch(() => { }); // 先等自動儲存做完
+            const rows = cloudMasterStore.rows || [];
+            await Promise.all([
+                window.CloudStore.saveSetting("shift_rules", shiftRules),
+                window.CloudStore.saveSetting("effective_rules", effectiveRules),
+                window.CloudStore.saveSetting("events", eventList),
+                window.CloudStore.saveSetting("shift_auto_months", shiftAutoMonths),
+            ]);
+            // 畫面上沒有電話資料時不動雲端的電話資料（避免不小心清空）
+            if (rows.length) await window.CloudStore.saveCalls(rows, loadedFileNames, true);
+            const sum = await window.CloudStore.cloudSummary();
+            const time = new Date().toLocaleString("zh-TW", { hour12: false });
+            setSyncStatus(`已同步到雲端（${time}）`);
+            const mismatch = rows.length && sum.total !== rows.length;
+            alert(`${mismatch ? "⚠ 同步完成，但筆數對不起來" : "✅ 同步完成"}\n\n雲端現在有：\n・電話資料 ${sum.total.toLocaleString()} 筆（${sum.months} 個月）\n・班表、人員有效期間、事件：已存好\n\n畫面上的電話資料：${rows.length.toLocaleString()} 筆\n同步時間：${time}${mismatch ? "\n\n請截圖給 Claude 看。" : ""}`);
+        }
+        catch (e) {
+            console.error(e);
+            setSyncStatus("同步到雲端失敗");
+            alert("同步到雲端失敗：" + window.CloudStore.errorText(e) + "\n資料還在畫面上，可以再按一次「同步到雲端」。");
+        }
+        finally {
+            cloudSavingRef.current -= 1;
+            setManualSyncing(false);
+        }
+    };
     const logoutCloud = () => {
         if (cloudSavingRef.current > 0) return alert("資料還在存到雲端，請等右上角顯示「已存到雲端」再登出。");
         if (!window.confirm("確定要登出嗎？\n登出後畫面上的資料會清掉，雲端的資料還在，下次登入會再讀回來。")) return;
@@ -3336,6 +3372,7 @@ function App() {
                 cloudUser
                     ? React.createElement("span", { style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#475569" } },
                         React.createElement("span", { title: "已登入雲端", style: { color: "#15803d", fontWeight: "700" } }, `☁ ${cloudUser.email}`),
+                        React.createElement("button", { type: "button", onClick: syncNowToCloud, disabled: manualSyncing, title: "把目前的電話資料、班表、人員有效期間、事件全部重新存到雲端", style: { border: "0.5px solid #86efac", background: "#f0fdf4", color: "#15803d", borderRadius: "6px", padding: "4px 10px", fontSize: "11px", fontWeight: "700", cursor: manualSyncing ? "wait" : "pointer", fontFamily: "inherit" } }, manualSyncing ? "同步中…" : "⟳ 同步到雲端"),
                         React.createElement("button", { type: "button", onClick: logoutCloud, style: { border: "0.5px solid var(--line)", background: "var(--surface)", color: "var(--ink-500)", borderRadius: "6px", padding: "4px 8px", fontSize: "11px", cursor: "pointer", fontFamily: "inherit" } }, "登出"))
                     : React.createElement("button", { type: "button", onClick: () => setLocalOnly(false), title: "目前資料只在這台電腦", style: { border: "0.5px solid #bfdbfe", background: "#eff6ff", color: "#1d4ed8", borderRadius: "6px", padding: "4px 8px", fontSize: "11px", cursor: "pointer", fontFamily: "inherit" } }, "本機模式｜登入雲端"),
                 React.createElement("button", { "data-eyecare-btn": "true", "data-eyecare-idle-color": "var(--ink-500)", ref: (el) => el && window.__eyecareSyncButton && window.__eyecareSyncButton(el), type: "button", title: "\u8B77\u773C\u6A21\u5F0F", "aria-label": "\u8B77\u773C\u6A21\u5F0F\u5207\u63DB", style: { width: "32px", height: "32px", borderRadius: "7px", border: "0.5px solid var(--line)", background: "var(--surface)", color: "var(--ink-500)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" } },

@@ -117,14 +117,16 @@
     return { rows: rows, fileNames: lastMeta.fileNames || [], updatedAt: lastMeta.updatedAt || null, updatedBy: lastMeta.updatedBy || "" };
   }
   // 把目前全部資料存上雲端：只寫有變動的月份，刪掉已經不在的月份。
-  async function saveCalls(rows, fileNames) {
+  // force＝true（手動同步）：每個月份都重寫一次，不管有沒有變動。
+  async function saveCalls(rows, fileNames, force) {
     init();
     if (!lastMeta) {
       const metaDoc = await db.collection(META).doc("calls").get();
       lastMeta = metaDoc.exists ? metaDoc.data() : { months: {}, fileNames: [] };
     }
     const packed = packByMonth(rows);
-    const plan = planCallSync(packed, lastMeta.months);
+    const plan = planCallSync(packed, force ? {} : lastMeta.months);
+    if (force) plan.remove = Object.keys(lastMeta.months || {}).filter(function (m) { return !packed[m]; });
     const oldMonths = lastMeta.months || {};
     for (const m of plan.write) {
       const batch = db.batch();
@@ -145,6 +147,17 @@
     return { written: plan.write.length, removed: plan.remove.length };
   }
 
+  // 雲端目前的狀況（只讀目錄，不讀電話資料）：共幾筆、幾個月、最後更新時間
+  async function cloudSummary() {
+    init();
+    const doc = await db.collection(META).doc("calls").get();
+    if (!doc.exists) return { total: 0, months: 0, updatedAt: null };
+    const d = doc.data();
+    const months = d.months || {};
+    const total = Object.keys(months).reduce(function (n, m) { return n + (months[m].count || 0); }, 0);
+    return { total: total, months: Object.keys(months).length, updatedAt: d.updatedAt && d.updatedAt.toDate ? d.updatedAt.toDate() : null };
+  }
+
   function errorText(e) {
     const code = (e && e.code) || "";
     if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found" || code === "auth/invalid-login-credentials") return "Email 或密碼不對，請再確認一次。";
@@ -155,5 +168,5 @@
     return "發生錯誤：" + ((e && e.message) || code || "未知錯誤");
   }
 
-  return { available, onAuth, signIn, signOut, loadSettings, saveSetting, loadCalls, saveCalls, errorText, stripRow, byteLength, hashText, packByMonth, planCallSync };
+  return { available, onAuth, signIn, signOut, loadSettings, saveSetting, loadCalls, saveCalls, cloudSummary, errorText, stripRow, byteLength, hashText, packByMonth, planCallSync };
 });
