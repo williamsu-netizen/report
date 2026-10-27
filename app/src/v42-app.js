@@ -4,8 +4,9 @@ const EMPTY_EFFECTIVE_RULES = { "周明瑝": { start: "2025-W09", end: "2025-W35
 const EMPTY_CLOUD_STORE = { rows: [], weeks: {}, months: {}, years: {}, detailByWeek: {} };
 const EMPTY_PREVIEW_META = { mode: "none", title: "尚未載入資料", weekKeys: [], monthKeys: [], yearKeys: [], sourceCount: 0, recordCountBeforeDedupe: 0, recordCountAfterDedupe: 0 };
 const EMPTY_EVENT_LIST = [];
-const APP_VERSION = "v42.8.1｜手動同步版";
+const APP_VERSION = "v42.8.2｜同步雙重確認版";
 const VERSION_HISTORY = [
+    { version: "v42.8.2-cloud", date: "2026-10-27", title: "同步雙重確認版", changes: ["由 V42.8.1 另存新檔，未覆蓋舊版", "按「同步到雲端」後要確認兩次才會真的同步", "第一次確認：列出畫面上要存的資料（幾筆、幾個月）和雲端現在有幾筆；畫面上比雲端少時，用 ⚠ 提醒同步後雲端會變少", "第二次確認：最後再問一次，按「取消」就什麼都不會改"] },
     { version: "v42.8.1-cloud", date: "2026-10-27", title: "手動同步版", changes: ["由 V42.8 另存新檔，未覆蓋舊版", "右上角新增「同步到雲端」按鈕：按下去會把目前的電話資料、班表、人員有效期間、事件全部重新存一次到雲端", "同步完會再去雲端查一次，跳出視窗告訴你：雲端現在有幾筆電話、幾個月、同步時間", "畫面上沒有電話資料時，只同步設定，不會把雲端的電話資料清掉", "自動同步照舊；手動同步是給你多一層安心"] },
     { version: "v42.8.0-cloud", date: "2026-10-27", title: "雲端版", changes: ["由 V42.7 另存新檔，未覆蓋舊版", "接上新的 Firebase 雲端（專案 office-e266d），跟舊版的雲端完全分開", "打開網頁先用 Email＋密碼登入；登入後自動從雲端讀回電話資料、班表、人員有效期間、事件", "匯入電話資料後自動存到雲端（只寫有變動的月份）；改班表、人員有效期間、事件也會馬上存到雲端", "也可以選「先不登入」，跟 V42.7 一樣只在這台電腦用", "右上角顯示登入的帳號，可以登出；登出後畫面上的資料會清掉，雲端的資料還在"] },
     { version: "v42.7.0-local", date: "2026-10-26", title: "人員班別歷程版", changes: ["由 V42.6 另存新檔，未覆蓋舊版", "報表分析新增「人員班別歷程」頁：選一位客服，看他每個月上什麼班（時間線與每月明細）", "同一頁列出每次換班前後的表現比較：每月接聽數、Q1／Q2 非常滿意、Q1／Q2 調查率、平均處理與發話時間", "可選換班前後各比 1、3 或 6 個月；只算人員有效期間內的電話"] },
@@ -2933,6 +2934,17 @@ function App() {
     const syncNowToCloud = async () => {
         if (!cloudOnRef.current) return alert("還沒登入雲端，不能同步。");
         if (manualSyncing) return;
+        // V42.8.2：雙重確認。先查雲端現在有幾筆，跟畫面上的比給使用者看。
+        const screenRows = cloudMasterStore.rows || [];
+        const screenMonths = new Set(screenRows.map((r) => r.monthKey).filter(Boolean)).size;
+        let before = null;
+        try { before = await window.CloudStore.cloudSummary(); }
+        catch (e) { console.error(e); return alert("連不上雲端，沒有同步：" + window.CloudStore.errorText(e)); }
+        const shrink = screenRows.length > 0 && screenRows.length < before.total;
+        const first = window.confirm(`【第 1 次確認】要同步到雲端嗎？\n\n畫面上要存的資料：\n・電話資料 ${screenRows.length.toLocaleString()} 筆（${screenMonths} 個月）${screenRows.length ? "" : "（沒有電話資料，只存設定，雲端的電話資料不會動）"}\n・班表、人員有效期間、事件\n\n雲端現在有：電話資料 ${before.total.toLocaleString()} 筆（${before.months} 個月）${shrink ? `\n\n⚠ 注意：畫面上比雲端少 ${(before.total - screenRows.length).toLocaleString()} 筆，同步後雲端會變成跟畫面一樣（變少）。` : ""}\n\n同步後，雲端會變成跟畫面上一樣。`);
+        if (!first) return setSyncStatus("已取消同步，雲端沒有變更");
+        const second = window.confirm(`【第 2 次確認】最後確認：真的要同步嗎？\n\n按「確定」就開始同步；按「取消」什麼都不會改。`);
+        if (!second) return setSyncStatus("已取消同步，雲端沒有變更");
         setManualSyncing(true);
         cloudSavingRef.current += 1;
         setSyncStatus("正在同步到雲端…（先不要關掉網頁）");
