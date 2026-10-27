@@ -4,8 +4,9 @@ const EMPTY_EFFECTIVE_RULES = { "周明瑝": { start: "2025-W09", end: "2025-W35
 const EMPTY_CLOUD_STORE = { rows: [], weeks: {}, months: {}, years: {}, detailByWeek: {} };
 const EMPTY_PREVIEW_META = { mode: "none", title: "尚未載入資料", weekKeys: [], monthKeys: [], yearKeys: [], sourceCount: 0, recordCountBeforeDedupe: 0, recordCountAfterDedupe: 0 };
 const EMPTY_EVENT_LIST = [];
-const APP_VERSION = "v42.8.2｜同步雙重確認版";
+const APP_VERSION = "v42.8.3｜取代雙重確認版";
 const VERSION_HISTORY = [
+    { version: "v42.8.3-cloud", date: "2026-10-27", title: "取代雙重確認版", changes: ["由 V42.8.2 另存新檔，未覆蓋舊版", "匯入預覽的紅色「取代目前資料」按鈕，有舊資料時要確認兩次才會執行", "第一次確認：列出目前幾通會被換成這次的幾通、哪些月份會整個不見；登入雲端時註明雲端也會一起被換掉、被刪掉", "第二次確認：最後再問一次；任何一次按取消，資料完全不變，預覽視窗也還在，可以改按「追加並合併」"] },
     { version: "v42.8.2-cloud", date: "2026-10-27", title: "同步雙重確認版", changes: ["由 V42.8.1 另存新檔，未覆蓋舊版", "按「同步到雲端」後要確認兩次才會真的同步", "第一次確認：列出畫面上要存的資料（幾筆、幾個月）和雲端現在有幾筆；畫面上比雲端少時，用 ⚠ 提醒同步後雲端會變少", "第二次確認：最後再問一次，按「取消」就什麼都不會改"] },
     { version: "v42.8.1-cloud", date: "2026-10-27", title: "手動同步版", changes: ["由 V42.8 另存新檔，未覆蓋舊版", "右上角新增「同步到雲端」按鈕：按下去會把目前的電話資料、班表、人員有效期間、事件全部重新存一次到雲端", "同步完會再去雲端查一次，跳出視窗告訴你：雲端現在有幾筆電話、幾個月、同步時間", "畫面上沒有電話資料時，只同步設定，不會把雲端的電話資料清掉", "自動同步照舊；手動同步是給你多一層安心"] },
     { version: "v42.8.0-cloud", date: "2026-10-27", title: "雲端版", changes: ["由 V42.7 另存新檔，未覆蓋舊版", "接上新的 Firebase 雲端（專案 office-e266d），跟舊版的雲端完全分開", "打開網頁先用 Email＋密碼登入；登入後自動從雲端讀回電話資料、班表、人員有效期間、事件", "匯入電話資料後自動存到雲端（只寫有變動的月份）；改班表、人員有效期間、事件也會馬上存到雲端", "也可以選「先不登入」，跟 V42.7 一樣只在這台電腦用", "右上角顯示登入的帳號，可以登出；登出後畫面上的資料會清掉，雲端的資料還在"] },
@@ -3044,6 +3045,18 @@ function App() {
     const applyPendingImport = (action) => {
         if (!pendingImport) return;
         const append = action === "append";
+        // V42.8.3：取代有舊資料時要雙重確認（登入雲端時，雲端的資料也會一起被換掉）
+        const currentRows = cloudMasterStore.rows || [];
+        if (!append && currentRows.length) {
+            const newMonths = new Set(pendingImport.newRowsMerged.map((r) => r.monthKey));
+            const lostMonths = Array.from(new Set(currentRows.map((r) => r.monthKey).filter(Boolean))).filter((m) => !newMonths.has(m)).sort();
+            const lostText = lostMonths.length ? `\n\n⚠ 這 ${lostMonths.length} 個月會整個不見：\n${lostMonths.slice(0, 12).map((m) => `${m.slice(0, 4)} 年 ${Number(m.slice(5, 7))} 月`).join("、")}${lostMonths.length > 12 ? ` 等 ${lostMonths.length} 個月` : ""}` : "";
+            const cloudText = cloudOnRef.current ? "\n\n☁ 你已登入雲端：雲端的資料也會一起被換掉、被刪掉。" : "";
+            const first = window.confirm(`【第 1 次確認】確定要「取代」嗎？\n\n目前的 ${currentRows.length.toLocaleString()} 通資料，會全部換成這次匯入的 ${pendingImport.newRowsMerged.length.toLocaleString()} 通。${lostText}${cloudText}\n\n只是要加新的資料，請按「取消」，改按「追加並合併」。`);
+            if (!first) return setUploadMessage("已取消「取代」，資料沒有變更。可以改按「追加並合併」。");
+            const second = window.confirm(`【第 2 次確認】最後確認：真的要取代嗎？\n\n按「確定」就換掉目前的 ${currentRows.length.toLocaleString()} 通資料${cloudOnRef.current ? "（包含雲端）" : ""}；按「取消」什麼都不會改。`);
+            if (!second) return setUploadMessage("已取消「取代」，資料沒有變更。可以改按「追加並合併」。");
+        }
         const baseRows = append ? (cloudMasterStore.rows || []) : [];
         const sortRows = (list) => list.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
         const rows = baseRows.length ? sortRows(dedupeRows([...baseRows, ...pendingImport.newRowsMerged])) : sortRows(pendingImport.newRowsMerged.slice());
